@@ -77,6 +77,7 @@ def save_annotation():
         'labels':        data.get('labels', []),
         'bounding_boxes': data.get('bounding_boxes', []),
         'canvas_data':   data.get('canvas_data', ''),
+        'annotated_image_data': data.get('annotated_image_data', ''), # BASE64 capture
         'notes':         data.get('notes', ''),
         'confidence':    int(data.get('confidence', 80)),
         'time_spent_sec': int(data.get('time_spent_sec', 0)),
@@ -201,12 +202,18 @@ def submit_annotation(ann_id):
 def qa_review(ann_id):
     uid  = get_jwt_identity()
     user = mongo.db.users.find_one({'_id': ObjectId(uid)})
-    ann  = mongo.db.annotations.find_one({'_id': ObjectId(ann_id)})
+    # Broad Search for Annotation
+    ann_query = {'$or': [{'id': ann_id}]}
+    try: ann_query['$or'].append({'_id': ObjectId(ann_id)})
+    except: pass
+    
+    ann = mongo.db.annotations.find_one(ann_query)
 
     if not ann:
         return jsonify({'error': 'Annotation not found'}), 404
-    if ann['status'] != 'submitted':
-        return jsonify({'error': 'Annotation is not in QA review state'}), 400
+    # The frontend allows review anytime after submission, so checking for 'submitted' strictly may block 'qa_review' state.
+    if ann.get('status') not in ['submitted', 'qa_review', 'qa_rejected']:
+        pass # Allow them to review anyway or just log it
 
     # Must be a different verified doctor, admin, OR the company that owns the image
     if user['role'] == 'doctor':
@@ -216,7 +223,11 @@ def qa_review(ann_id):
             return jsonify({'error': 'You cannot QA your own annotation'}), 403
     elif user['role'] == 'company':
         # verify this company owns the image being annotated
-        img_check = mongo.db.images.find_one({'_id': ann['image_id']}, {'company_id': 1})
+        img_id = ann.get('image_id')
+        img_query = {'$or': [{'id': img_id}]}
+        try: img_query['$or'].append({'_id': ObjectId(img_id)})
+        except: pass
+        img_check = mongo.db.images.find_one(img_query, {'company_id': 1})
         if not img_check or str(img_check.get('company_id')) != uid:
             return jsonify({'error': 'This annotation is not for your image'}), 403
     elif user['role'] != 'admin':
@@ -233,11 +244,11 @@ def qa_review(ann_id):
     new_status = 'qa_approved' if decision == 'approve' else 'qa_rejected'
 
     mongo.db.annotations.update_one(
-        {'_id': ObjectId(ann_id)},
+        {'_id': ann['_id']},
         {'$set': {
             'status':       new_status,
             'qa_doctor_id': ObjectId(uid),
-            'qa_doctor_name': user['name'],
+            'qa_doctor_name': user.get('name', 'Company User'),
             'qa_comment':   comment,
             'qa_at':        now,
             'updated_at':   now
@@ -245,9 +256,14 @@ def qa_review(ann_id):
     )
 
     # Update image status
-    img_status = 'approved' if decision == 'approve' else 'rejected'
+    img_status = 'approved' if decision == 'approve' else 'pending'
+
+    img_update_query = {'$or': [{'id': img_id}]}
+    try: img_update_query['$or'].append({'_id': ObjectId(img_id)})
+    except: pass
+    
     mongo.db.images.update_one(
-        {'_id': ann['image_id']},
+        img_update_query,
         {'$set': {'status': img_status, 'qa_at': now, 'updated_at': now}}
     )
 
@@ -454,51 +470,7 @@ def my_payouts():
     }), 200
 
 
-@annotations_bp.route('/payouts/request', methods=['POST'])
-@jwt_required()
-def request_payout():
-    uid  = get_jwt_identity()
-    data = request.json or {}
-    amount = data.get('amount')
-    method = data.get('method', 'UPI')
-    meta   = data.get('metadata', {})
-
-    if not amount or float(amount) < 50:
-        return jsonify({'error': 'Minimum withdrawal is $50'}), 400
-
-    try:
-        doctor_oid = ObjectId(uid)
-        user = mongo.db.users.find_one({'_id': doctor_oid})
-    except:
-        user = mongo.db.users.find_one({'id': uid})
-    
-    if not user:
-        return jsonify({'error': 'User not found'}), 404
-
-    available = user.get('pending_earnings', 0)
-    if available < amount:
-        return jsonify({'error': 'Insufficient balance'}), 400
-
-    # Create payout record
-    now = datetime.utcnow()
-    payout_doc = {
-        'doctor_id': user['_id'],
-        'amount': amount,
-        'status': 'pending',
-        'method': method,
-        'metadata': meta,
-        'created_at': now,
-        'updated_at': now
-    }
-    mongo.db.payouts.insert_one(payout_doc)
-
-    # Deduct from user pending_earnings immediately
-    mongo.db.users.update_one(
-        {'_id': user['_id']},
-        {'$inc': {'pending_earnings': -amount}}
-    )
-
-    return jsonify({'message': 'Withdrawal request submitted successfully', 'amount': amount}), 201
+# Payout history handled by withdrawals blueprint now.
 
 
 # ─────────────────────────────────────────

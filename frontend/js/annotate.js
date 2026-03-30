@@ -91,15 +91,26 @@ async function loadImageData() {
   const loading = document.getElementById('canvas-loading');
   try {
     const token  = getToken();
-    const resp   = await fetch(`/api/images/${imageId}/file`, {
+    // Cache-busting prevents the browser from serving the same image for different IDs
+    const resp   = await fetch(`/api/images/${imageId}/file?t=${Date.now()}`, {
       headers: { 'Authorization': `Bearer ${token}` }
     });
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    
+    if (!resp.ok) {
+      const errTxt = await resp.text();
+      throw new Error(`Server returned ${resp.status}: ${errTxt}`);
+    }
+    
     const blob    = await resp.blob();
+    if (blob.size < 5) {
+      throw new Error(`Retrieved file is too small (${blob.size} bytes), possibly corrupted or empty.`);
+    }
+    
     const blobUrl = URL.createObjectURL(blob);
 
     fabric.Image.fromURL(blobUrl, (img) => {
       if (!img || !img.width) {
+        console.error('[LOAD_IMAGE_ERROR] Fabric failed to load image from blob URL');
         showDicomPlaceholder();
         if (loading) loading.style.display = 'none';
         URL.revokeObjectURL(blobUrl);
@@ -122,12 +133,16 @@ async function loadImageData() {
       canvas.renderAll();
       if (loading) loading.style.display = 'none';
       URL.revokeObjectURL(blobUrl);
+      
+      // Initialize history with the base image state
+      saveHistory(); 
     });
   } catch(err) {
-    console.error('Image load error:', err);
-    showToast(`Image load: ${err.message}. You can still annotate.`, 'warning');
+    console.error('[LOAD_IMAGE_ERROR]', err);
+    showToast(`Image Error: ${err.message}`, 'error');
     showDicomPlaceholder();
     if (loading) loading.style.display = 'none';
+    saveHistory(); // Still init history to prevent crashes
   }
 }
 
@@ -286,20 +301,28 @@ function updateAnnotationsList() {
   ].join('');
 }
 
+let isProcessingHistory = false;
+
 function deleteSelected() {
   const activeObjs = canvas.getActiveObjects();
   if (!activeObjs.length) return;
-  activeObjs.forEach(o => canvas.remove(o));
-  canvas.discardActiveObject();
-  canvas.renderAll();
-  saveHistory();
-  updateAnnotationsList();
+  
+  if (confirm(`Delete ${activeObjs.length} selected annotation(s)?`)) {
+    activeObjs.forEach(o => canvas.remove(o));
+    canvas.discardActiveObject();
+    canvas.renderAll();
+    saveHistory();
+    updateAnnotationsList();
+  }
 }
 
 function clearAll() {
   if (!confirm('Clear all annotations? This cannot be undone.')) return;
-  canvas.getObjects().filter(o => o.type !== 'image').forEach(o => canvas.remove(o));
+  canvas.getObjects().filter(o => o.type !== 'image' && o.type !== 'rect').forEach(o => canvas.remove(o));
+  // Specifically remove actual annotation rects
+  canvas.getObjects().filter(o => o.type === 'rect' && o.selectable).forEach(o => canvas.remove(o));
   canvas.renderAll();
+  saveHistory();
   updateAnnotationsList();
 }
 
@@ -308,28 +331,40 @@ function zoomOut()   { canvas.setZoom(canvas.getZoom() * 0.8);  canvas.renderAll
 function resetZoom() { canvas.setZoom(1); canvas.setViewportTransform([1,0,0,1,0,0]); canvas.renderAll(); }
 
 function saveHistory() {
+  // Don't save history if we are currently restoring it
+  if (isProcessingHistory) return;
+  
   historyIndex++;
   history = history.slice(0, historyIndex);
   history.push(JSON.stringify(canvas.toJSON(['_label'])));
 }
 
 function undoAction() {
-  if (historyIndex <= 0) return;
+  if (isProcessingHistory || historyIndex <= 0) return;
   historyIndex--;
   restoreHistory();
 }
 
 function redoAction() {
-  if (historyIndex >= history.length - 1) return;
+  if (isProcessingHistory || historyIndex >= history.length - 1) return;
   historyIndex++;
   restoreHistory();
 }
 
-function restoreHistory() {
+async function restoreHistory() {
+  if (isProcessingHistory) return;
+  isProcessingHistory = true;
+  
   canvas.loadFromJSON(history[historyIndex], () => {
-    canvas.getObjects().forEach(o => { if (o.type === 'image') canvas.sendToBack(o); });
+    canvas.getObjects().forEach(o => { 
+      if (o.type === 'image') {
+        o.set({ selectable: false, evented: false });
+        canvas.sendToBack(o); 
+      }
+    });
     canvas.renderAll();
     updateAnnotationsList();
+    isProcessingHistory = false;
   });
 }
 
@@ -353,9 +388,17 @@ function getAnnotationPayload() {
 
   const secs = Math.floor((Date.now() - startTime) / 1000);
 
+  // Capture final annotated image for review
+  const annotatedImageData = canvas.toDataURL({
+    format: 'jpeg',
+    quality: 0.8,
+    multiplier: 1
+  });
+
   return {
     image_id:       imageId,
     canvas_data:    JSON.stringify(canvas.toJSON(['_label'])),
+    annotated_image_data: annotatedImageData,
     labels:         usedLabels,
     bounding_boxes: bboxes,
     notes:          document.getElementById('notes').value.trim(),

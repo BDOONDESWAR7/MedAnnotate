@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Help & Feedback — MedAnnotate</title>
+  <link rel="stylesheet" href="/css/main.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+</head>
+<body>
+  <div class="video-background"><video autoplay muted loop playsinline><source src="/BG.mp4" type="video/mp4"></video></div>
+  <div class="video-overlay"></div>
+  <div class="page-layout">
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <div class="logo-icon">🩺</div>
+        <div><div class="logo-text">MedAnnotate</div><div class="logo-sub">Doctor Portal</div></div>
+      </div>
+      <nav class="sidebar-nav">
+        <div class="nav-section-label">Main</div>
+        <a href="/doctor/dashboard" class="nav-item"><i class="fa fa-gauge"></i> Dashboard</a>
+        <a href="/doctor/dashboard#queue" class="nav-item"><i class="fa fa-images"></i> Image Queue</a>
+        <a href="/doctor/earnings" class="nav-item"><i class="fa fa-dollar-sign"></i> Earnings & History</a>
+        <a href="/doctor/wallet" class="nav-item"><i class="fa fa-wallet"></i> My Wallet</a>
+        <div class="nav-section-label">Account</div>
+        <a href="/doctor/profile" class="nav-item"><i class="fa fa-user"></i> My Profile</a>
+        <a href="/doctor/settings" class="nav-item"><i class="fa fa-gear"></i> Account Settings</a>
+        <a href="/doctor/help" class="nav-item active"><i class="fa fa-circle-question"></i> Help & Feedback</a>
+      </nav>
+      <div class="sidebar-footer">
+        <button class="logout-btn" onclick="logout()"><i class="fa fa-right-from-bracket"></i> Sign Out</button>
+      </div>
+    </aside>
+
+    <header class="navbar">
+      <div class="navbar-left">
+        <div><div class="page-title">Help & Feedback</div><div class="page-subtitle">Support and system inquiries</div></div>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <div class="alert alert-info" style="margin-bottom:24px">
+        <i class="fa fa-info-circle"></i>
+        <span>Need clarification on a dataset? Or have feedback for a specific company? We're here to help.</span>
+      </div>
+
+      <div class="grid-2" style="grid-template-columns: 1fr 1fr; gap: 24px; align-items: start;">
+        <div class="card">
+          <h3><i class="fa fa-paper-plane"></i> New Inquiry</h3>
+          <div class="form-group" style="margin-top:20px">
+            <label class="form-label">Recipient</label>
+            <select id="company-select" class="form-input">
+              <option value="system">MedAnnotate Admin (General Support)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Subject</label>
+            <input type="text" id="subject-input" class="form-input" placeholder="e.g., Query regarding Chest X-Ray labels" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Your Message</label>
+            <textarea id="message-input" class="form-input" style="height:120px;resize:none;" placeholder="Detail your question here..."></textarea>
+          </div>
+          <button class="btn btn-primary" id="send-btn" onclick="submitInquiry()">Send Inquiry</button>
+        </div>
+
+        <div class="card">
+          <h3><i class="fa fa-history"></i> My Past Inquiries</h3>
+          <div id="inquiry-history" style="margin-top:20px; display:flex; flex-direction:column; gap:12px; max-height:430px; overflow-y:auto;">
+            <div style="text-align:center;padding:20px;color:var(--text-muted)">Loading your inquiries...</div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Inquiry Thread Modal -->
+  <div id="thread-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.8);backdrop-filter:blur(8px);align-items:center;justify-content:center">
+    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:20px;width:600px;max-width:94vw;max-height:90vh;display:flex;flex-direction:column;position:relative;padding:28px">
+      <button onclick="document.getElementById('thread-modal').style.display='none'" style="position:absolute;top:16px;right:16px;background:var(--bg-secondary);border:none;color:#fff;border-radius:8px;width:32px;height:32px;cursor:pointer">✕</button>
+      <h3 id="t-subject" style="margin:0 0 16px">Inquiry Thread</h3>
+      <div id="t-messages" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:12px;margin-bottom:16px;padding:10px;background:rgba(0,0,0,0.2);border-radius:12px"></div>
+      <div style="display:flex;gap:10px">
+        <input type="text" id="t-reply-text" class="form-input" style="flex:1" placeholder="Add a reply..." />
+        <button class="btn btn-primary" onclick="sendThreadReply()">Reply</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    let currentThreadId = null;
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      const user = requireAuth(['doctor']);
+      if (!user) return;
+      
+      loadCompanies();
+      loadMyInquiries();
+    });
+
+    async function loadCompanies() {
+      const select = document.getElementById('company-select');
+      const res = await api.get('/support/my-companies');
+      if (res?.ok && res.data.companies) {
+        res.data.companies.forEach(c => {
+          const opt = document.createElement('option');
+          opt.value = c.id;
+          opt.textContent = `Company: ${c.name}`;
+          select.appendChild(opt);
+        });
+      }
+    }
+
+    async function submitInquiry() {
+      const subj = document.getElementById('subject-input').value.trim();
+      const msg  = document.getElementById('message-input').value.trim();
+      const recipient = document.getElementById('company-select').value;
+      
+      if (!subj || !msg) return showToast('Subject and message are required', 'warning');
+
+      const btn = document.getElementById('send-btn');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Sending...';
+
+      const res = await api.post('/support/inquiry', {
+          subject: subj,
+          message: msg,
+          recipient_type: recipient === 'system' ? 'system' : 'company',
+          company_id: recipient === 'system' ? null : recipient
+      });
+
+      if (res.ok) {
+        showToast('Inquiry sent successfully!', 'success');
+        document.getElementById('subject-input').value = '';
+        document.getElementById('message-input').value = '';
+        loadMyInquiries();
+      } else {
+        showToast(res.data?.error || 'Failed to send inquiry', 'error');
+      }
+      btn.disabled = false;
+      btn.innerHTML = 'Send Inquiry';
+    }
+
+    async function loadMyInquiries() {
+      const container = document.getElementById('inquiry-history');
+      const res = await api.get('/support/my-inquiries');
+      if (res?.ok) {
+        if (!res.data.inquiries?.length) {
+          container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted)">No past inquiries found.</div>';
+          return;
+        }
+        container.innerHTML = res.data.inquiries.map(i => `
+          <div onclick="openThread('${i.id}')" style="background:var(--bg-secondary);padding:12px;border-radius:10px;border:1px solid var(--border);cursor:pointer;transition:all 0.2s" onmouseover="this.style.borderColor='var(--cyan)'" onmouseout="this.style.borderColor='var(--border)'">
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:0.75rem">
+                <span style="color:var(--text-muted)">${formatDate(i.created_at)}</span>
+                <span class="badge ${i.status==='replied'?'badge-green':'badge-gold'}">${i.status.toUpperCase()}</span>
+            </div>
+            <div style="font-weight:600;font-size:0.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(i.subject)}</div>
+          </div>
+        `).join('');
+      }
+    }
+
+    async function openThread(id) {
+        currentThreadId = id;
+        const res = await api.get('/support/my-inquiries'); // Just reuse the list fetch for now, we'll find by ID locally
+        const inquiry = res.data.inquiries.find(x => x.id === id);
+        
+        document.getElementById('thread-modal').style.display = 'flex';
+        document.getElementById('t-subject').textContent = inquiry.subject;
+        
+        const msgContainer = document.getElementById('t-messages');
+        let html = `<div style="padding:10px;background:rgba(255,255,255,0.03);border-radius:8px;font-size:0.875rem">
+            <div style="color:var(--cyan);font-weight:700;font-size:0.7rem;margin-bottom:4px">YOU (ORIGINAL)</div>
+            ${esc(inquiry.message)}
+        </div>`;
+        
+        (inquiry.replies || []).forEach(r => {
+            const isMe = r.sender_role === 'doctor';
+            html += `<div style="padding:10px;background:${isMe?'rgba(255,255,255,0.03)':'rgba(0,212,255,0.05)'};border-radius:8px;font-size:0.875rem;margin-top:8px;border-left:2px solid ${isMe?'#8899aa':'var(--cyan)'}">
+                <div style="color:${isMe?'#8899aa':'var(--cyan)'};font-weight:700;font-size:0.7rem;margin-bottom:4px">
+                    ${isMe ? 'YOU' : r.sender_name.toUpperCase()} (${r.sender_role.toUpperCase()})
+                </div>
+                ${esc(r.message)}
+            </div>`;
+        });
+        
+        msgContainer.innerHTML = html;
+        msgContainer.scrollTop = msgContainer.scrollHeight;
+    }
+
+    async function sendThreadReply() {
+        const text = document.getElementById('t-reply-text').value.trim();
+        if (!text || !currentThreadId) return;
+        
+        const res = await api.post(`/support/inquiry/${currentThreadId}/reply`, { message: text });
+        if (res.ok) {
+            document.getElementById('t-reply-text').value = '';
+            showToast('Reply sent!', 'success');
+            openThread(currentThreadId);
+            loadMyInquiries();
+        } else {
+            showToast(res.data?.error || 'Failed to send reply', 'error');
+        }
+    }
+
+    function esc(s) { return String(s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  </script>
+</body>
+</html>

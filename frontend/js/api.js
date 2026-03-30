@@ -3,15 +3,19 @@
 const API_BASE = '/api';
 
 function getToken() {
-  return localStorage.getItem('token');
+  const t = localStorage.getItem('token');
+  if (!t || t === 'undefined' || t === 'null') return null;
+  return t;
 }
 
 function getUser() {
   const u = localStorage.getItem('user');
-  return u ? JSON.parse(u) : null;
+  if (!u || u === 'undefined' || u === 'null') return null;
+  try { return JSON.parse(u); } catch(e) { return null; }
 }
 
 function setAuth(token, user) {
+  if (!token) return clearAuth();
   localStorage.setItem('token', token);
   localStorage.setItem('user', JSON.stringify(user));
 }
@@ -31,7 +35,8 @@ async function apiFetch(endpoint, options = {}) {
 
   const res = await fetch(`${API_BASE}${endpoint}`, { ...options, headers });
 
-  if (res.status === 401) {
+  // Redirect to login if unauthorized or token is malformed (422)
+  if (res.status === 401 || res.status === 422) {
     clearAuth();
     window.location.href = '/login';
     return;

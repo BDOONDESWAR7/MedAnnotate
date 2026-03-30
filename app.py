@@ -29,11 +29,15 @@ def create_app():
     from routes.images      import images_bp
     from routes.annotations import annotations_bp
     from routes.admin       import admin_bp
+    from routes.withdrawals import withdrawals_bp
+    from routes.support     import support_bp
 
     app.register_blueprint(auth_bp,        url_prefix='/api/auth')
     app.register_blueprint(images_bp,      url_prefix='/api/images')
     app.register_blueprint(annotations_bp, url_prefix='/api/annotations')
     app.register_blueprint(admin_bp,       url_prefix='/api/admin')
+    app.register_blueprint(withdrawals_bp, url_prefix='/api/withdrawals')
+    app.register_blueprint(support_bp,     url_prefix='/api/support')
 
     # ── Frontend HTML routes ──────────────────────────────
     @app.route('/')
@@ -57,6 +61,15 @@ def create_app():
     @app.route('/doctor/wallet')
     def doctor_wallet(): return send_from_directory('frontend/doctor', 'wallet.html')
 
+    @app.route('/doctor/profile')
+    def doctor_profile(): return send_from_directory('frontend/doctor', 'profile.html')
+
+    @app.route('/doctor/settings')
+    def doctor_settings(): return send_from_directory('frontend/doctor', 'settings.html')
+
+    @app.route('/doctor/help')
+    def doctor_help(): return send_from_directory('frontend/doctor', 'help.html')
+
     @app.route('/company/dashboard')
     def company_dashboard(): return send_from_directory('frontend/company', 'dashboard.html')
 
@@ -69,8 +82,26 @@ def create_app():
     @app.route('/company/review')
     def company_review():    return send_from_directory('frontend/company', 'review.html')
 
+    @app.route('/company/withdrawals')
+    def company_withdrawals(): return send_from_directory('frontend/company', 'withdrawals.html')
+
+    @app.route('/company/profile')
+    def company_profile():     return send_from_directory('frontend/company', 'profile.html')
+
+    @app.route('/company/settings')
+    def company_settings():    return send_from_directory('frontend/company', 'settings.html')
+
     @app.route('/admin/dashboard')
     def admin_dashboard():   return send_from_directory('frontend/admin', 'dashboard.html')
+
+    @app.route('/admin/withdrawals')
+    def admin_withdrawals(): return send_from_directory('frontend/admin', 'withdrawals.html')
+
+    @app.route('/admin/mailbox')
+    def admin_mailbox(): return send_from_directory('frontend/admin', 'mailbox.html')
+
+    @app.route('/company/mailbox')
+    def company_mailbox(): return send_from_directory('frontend/company', 'mailbox.html')
 
     # ── Static files ──────────────────────────────────────
     @app.route('/css/<path:filename>')

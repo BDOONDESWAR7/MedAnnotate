@@ -13,15 +13,13 @@
 
 <body>
   <div class="video-background">
-    <video autoplay muted loop playsinline>
-      <source src="/BG.mp4" type="video/mp4">
-    </video>
+    <img src="/doctor-ai.jpeg" alt="Background">
   </div>
   <div class="video-overlay"></div>
 
   <!-- NAVBAR -->
   <nav
-    style="position:fixed;top:0;left:0;right:0;z-index:100;padding:0 40px;height:64px;background:rgba(8,13,26,0.95);backdrop-filter:blur(12px);border-bottom:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;justify-content:space-between;">
+    style="position:fixed;top:0;left:0;right:0;z-index:100;padding:0 40px;height:64px;background:transparent;backdrop-filter:blur(10px);border-bottom:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;justify-content:space-between;">
     <div style="display:flex;align-items:center;gap:10px;">
       <div class="logo-icon">🩺</div>
       <div>
@@ -35,10 +33,13 @@
   </nav>
 
   <!-- HERO -->
-  <section class="landing-hero" style="margin-top:64px;">
+  <section class="landing-hero">
     <div class="landing-badge"><i class="fa fa-shield-halved"></i> HIPAA-Safe • Anonymized • Gold Standard Data</div>
     <h1 class="landing-title">
-      AI-Powered Medical<br /><span>Image Annotation</span><br />Platform
+      AI-Powered <br />
+      Medical<br />
+      <span>Image Annotation</span>
+      Platform
     </h1>
     <p class="landing-desc">
       AI companies upload raw medical images. Verified specialist doctors annotate them with precision.
@@ -52,7 +53,7 @@
 
     <!-- STATS ROW -->
     <div
-      style="display:flex;gap:40px;margin-top:60px;padding:24px 40px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);flex-wrap:wrap;justify-content:center;">
+      style="display:flex;gap:40px;margin-top:60px;padding:24px 40px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);flex-wrap:wrap;justify-content:flex-start;">
       <div style="text-align:center;">
         <div style="font-size:1.8rem;font-weight:800;color:var(--cyan);">94K+</div>
         <div style="font-size:0.8rem;color:var(--text-secondary);">Images Annotated</div>

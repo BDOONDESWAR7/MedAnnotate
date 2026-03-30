@@ -52,13 +52,11 @@
         <a href="/doctor/earnings" class="nav-item"><i class="fa fa-dollar-sign"></i> Earnings & History</a>
         <a href="/doctor/wallet" class="nav-item active"><i class="fa fa-wallet"></i> My Wallet</a>
         <div class="nav-section-label">Account</div>
-        <a href="#" class="nav-item" onclick="showProfile()"><i class="fa fa-user"></i> My Profile</a>
+        <a href="/doctor/profile" class="nav-item"><i class="fa fa-user"></i> My Profile</a>
+        <a href="/doctor/settings" class="nav-item"><i class="fa fa-gear"></i> Account Settings</a>
+        <a href="/doctor/help" class="nav-item"><i class="fa fa-circle-question"></i> Help & Feedback</a>
       </nav>
       <div class="sidebar-footer">
-        <div style="padding:10px 8px;margin-bottom:8px">
-          <div style="font-size:0.875rem;font-weight:600" id="sf-name">Doctor</div>
-          <span class="badge badge-green" style="margin-top:4px">Verified</span>
-        </div>
         <button class="logout-btn" onclick="logout()"><i class="fa fa-right-from-bracket"></i> Sign Out</button>
       </div>
     </aside>
@@ -94,14 +92,24 @@
           <h3 style="margin-bottom:12px"><i class="fa fa-shield-halved" style="color:var(--med-green)"></i> Secure
             Payments</h3>
           <p style="font-size:0.875rem;line-height:1.6">Withdraw your earnings instantly via UPI or Bank Transfer.
-            Minimum withdrawal amount is $50.00.</p>
+            Minimum withdrawal amount is $5.00.</p>
         </div>
       </div>
 
       <div class="card" style="margin-bottom:24px">
-        <h2 style="margin-bottom:24px">Withdraw Funds</h2>
+        <h2 style="margin-bottom:24px">Withdraw Funds</h2      <div class="card" style="margin-bottom:24px">
+        <p style="font-size:0.875rem;color:var(--text-secondary);margin-bottom:24px">Select a method and enter the amount you wish to withdraw.</p>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div class="form-group" style="margin-bottom:24px; max-width: 300px;">
+          <label class="form-label">Withdrawal Amount ($)</label>
+          <div style="position:relative">
+            <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-muted)">$</span>
+            <input type="number" id="withdraw-amount" class="form-input" style="padding-left:28px" placeholder="0.00" min="5" step="1" />
+          </div>
+          <p style="font-size:0.72rem;color:var(--text-muted);margin-top:6px">Minimum withdrawal: $5.00</p>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px">
           <div class="withdraw-method-card" id="method-upi" onclick="selectMethod('upi')">
             <div class="withdraw-icon"><i class="fa fa-mobile-screen"></i></div>
             <div>
@@ -123,10 +131,8 @@
           <div class="form-group">
             <label class="form-label">UPI ID</label>
             <input type="text" id="upi-id" class="form-input" placeholder="username@bank" />
-            <p style="font-size:0.75rem;color:var(--text-muted);margin-top:6px">Please ensure your UPI ID is correct.
-            </p>
           </div>
-          <button class="btn btn-primary" onclick="proceedWithdraw('UPI')">Withdraw via UPI</button>
+          <button class="btn btn-primary" onclick="proceedWithdraw('UPI')">Submit Withdrawal Request</button>
         </div>
 
         <!-- Bank Form -->
@@ -144,81 +150,110 @@
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
             <div class="form-group">
               <label class="form-label">IFSC Code</label>
-              <input type="text" id="bank-ifsc" class="form-input" placeholder="IFSC" />
+              <input type="text" id="bank-ifsc" class="form-input" placeholder="IFSC Code" />
             </div>
             <div class="form-group">
               <label class="form-label">Bank Branch</label>
-              <input type="text" id="bank-branch" class="form-input" placeholder="Branch" />
-            </div>
-            <div class="withdraw-actions">
-              <button class="btn btn-green btn-lg" onclick="requestWithdrawal('upi')"><i
-                  class="fa fa-mobile-screen"></i> Withdraw via UPI</button>
-              <button class="btn btn-green btn-lg" onclick="requestWithdrawal('bank')"><i
-                  class="fa fa-building-columns"></i> Withdraw to Bank</button>
-            </div>
-            <div class="table-container">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Method</th>
-                    <th>Details</th>
-                    <th>Amount</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody id="withdraw-history">
-                  <tr>
-                    <td colspan="5" style="text-align:center;padding:24px;color:var(--text-muted)">No recent withdrawals
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+              <input type="text" id="bank-branch" class="form-input" placeholder="Branch Name" />
             </div>
           </div>
+          <button class="btn btn-primary" onclick="proceedWithdraw('BANK')">Submit Withdrawal Request</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 style="margin-bottom:20px"><i class="fa fa-clock-rotate-left"></i> Withdrawal History</h2>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Method</th>
+                <th>Amount</th>
+                <th>Status</th>
+                <th>Details</th>
+              </tr>
+            </thead>
+            <tbody id="withdraw-history">
+              <tr>
+                <td colspan="5" style="text-align:center;padding:32px;color:var(--text-muted)">
+                   <span class="spinner" style="margin-bottom:10px"></span><br>Loading history...
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </main>
   </div>
 
   <script src="/js/api.js"></script>
   <script>
     document.addEventListener('DOMContentLoaded', async () => {
-      const user = requireAuth(['doctor']);
+      let user = requireAuth(['doctor']);
       if (!user) return;
+
+      // Refresh profile to get latest earnings
+      try {
+        const profileRes = await api.get('/auth/profile');
+        if (profileRes.ok) {
+          user = profileRes.data;
+          localStorage.setItem('user', JSON.stringify(user));
+        }
+      } catch(e) {}
+
       initNavbar(user);
       setEl('sf-name', user.name);
       setEl('today-date', new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }));
 
-      loadBalance();
+      loadBalance(user);
       loadHistory();
     });
 
-    async function loadBalance() {
-      const res = await api.get('/annotations/my-stats');
-      if (res?.ok) {
-        const d = res.data;
-        setEl('avail-balance', formatMoney(d.earnings?.pending || 0));
-        setEl('total-earned', formatMoney((d.earnings?.paid || 0) + (d.earnings?.pending || 0)));
+    async function loadBalance(user) {
+      // Use the verified user object from localStorage/profile
+      setEl('avail-balance', formatMoney(user.pending_earnings || 0));
+      setEl('total-earned', formatMoney((user.total_earnings || 0)));
+      
+      // Auto-set amount to current balance if > 5
+      if (user.pending_earnings >= 5) {
+        document.getElementById('withdraw-amount').value = Math.floor(user.pending_earnings);
       }
     }
 
     async function loadHistory() {
-      const res = await api.get('/annotations/payouts');
+      const res = await api.get('/withdrawals/my');
       if (res?.ok) {
-        const list = res.data.payouts || [];
+        const list = res.data.withdrawals || [];
         const tbody = document.getElementById('withdraw-history');
         if (list.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text-muted)">No recent withdrawals</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--text-muted)">No withdrawal requests found.</td></tr>';
           return;
         }
-        tbody.innerHTML = list.map(p => `
-      <tr>
-        <td>${new Date(p.created_at).toLocaleDateString()}</td>
-        <td><span class="badge badge-blue">${p.method || 'Bank'}</span></td>
-        <td style="font-size:0.75rem;color:var(--text-secondary)">${p.method === 'UPI' ? (p.metadata?.upi || 'UPI') : (p.metadata?.bank_acc || 'Bank')}</td>
-        <td style="font-weight:600">${formatMoney(p.amount)}</td>
-        <td><span class="badge badge-${p.status === 'paid' ? 'green' : 'yellow'}">${p.status.toUpperCase()}</span></td>
-      </tr>
-    `).join('');
+
+        const statusMap = {
+          'pending_company': { label: 'Waiting for Company', class: 'gold' },
+          'pending_admin':   { label: 'Approved by Company', class: 'blue' },
+          'paid':           { label: 'Paid', class: 'green' },
+          'rejected':       { label: 'Rejected', class: 'red' }
+        };
+
+        tbody.innerHTML = list.map(w => {
+          const s = statusMap[w.status] || { label: w.status, class: 'gray' };
+          return `
+            <tr>
+              <td>${new Date(w.created_at).toLocaleDateString()}</td>
+              <td><span class="badge badge-outline">${w.method || 'System'}</span></td>
+              <td style="font-weight:700; color:var(--text-primary)">${formatMoney(w.amount)}</td>
+              <td><span class="badge badge-${s.class}">${s.label}</span></td>
+              <td style="font-size:0.75rem;color:var(--text-muted)">
+                ${w.company_name ? `Approved by ${w.company_name}` : 'Awaiting Review'}
+              </td>
+            </tr>
+          `;
+        }).join('');
+      } else {
+         document.getElementById('withdraw-history').innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--red)">Failed to load history</td></tr>';
       }
     }
 
@@ -231,43 +266,55 @@
     }
 
     async function proceedWithdraw(method) {
-      const amountStr = document.getElementById('avail-balance').textContent.replace('$', '').replace(',', '');
-      const amount = parseFloat(amountStr);
+      const amount = parseFloat(document.getElementById('withdraw-amount').value);
+      const user = getUser();
 
-      if (amount < 50) {
-        showToast('Minimum withdrawal is $50.00', 'error');
+      if (isNaN(amount) || amount < 5) {
+        showToast('Minimum withdrawal is $5.00', 'error');
+        return;
+      }
+      if (amount > (user.pending_earnings || 0)) {
+        showToast('Amount exceeds available balance', 'error');
         return;
       }
 
       let metadata = {};
       if (method === 'UPI') {
-        const upi = document.getElementById('upi-id').value;
+        const upi = document.getElementById('upi-id').value.trim();
         if (!upi) return showToast('Please enter your UPI ID', 'error');
-        metadata = { upi };
-      } else {
-        const bank_name = document.getElementById('bank-name').value;
-        const bank_acc = document.getElementById('bank-acc').value;
-        if (!bank_name || !bank_acc) return showToast('Please fill bank details', 'error');
-        metadata = { bank_name, bank_acc };
+        metadata = { upi_id: upi };
+      } else if (method === 'BANK') {
+        const bank_acc = document.getElementById('bank-acc').value.trim();
+        if (!bank_acc) return showToast('Please fill account details', 'error');
+        metadata = { bank_acc };
       }
 
-      const res = await api.post('/annotations/payouts/request', {
+      const btn = document.querySelector(`.method-content[style*="block"] .btn-primary`);
+      if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner" style="width:14px;height:14px"></span> Processing...'; }
+
+      const res = await api.post('/withdrawals/request', {
         amount: amount,
         method: method,
         metadata: metadata
       });
 
       if (res?.ok) {
-        showToast(`Withdrawal of ${formatMoney(amount)} submitted!`, 'success');
-        loadBalance();
+        showToast(`🎉 Withdrawal request of ${formatMoney(amount)} submitted!`, 'success');
+        // Refresh everything
+        const prof = await api.get('/auth/profile');
+        if (prof.ok) {
+            localStorage.setItem('user', JSON.stringify(prof.data));
+            loadBalance(prof.data);
+        }
         loadHistory();
       } else {
-        showToast(res?.error || 'Withdrawal failed', 'error');
+        showToast(res?.data?.error || 'Withdrawal request failed', 'error');
       }
+      
+      if (btn) { btn.disabled = false; btn.innerHTML = 'Submit Withdrawal Request'; }
     }
 
     function setEl(id, val) { const e = document.getElementById(id); if (e) e.textContent = String(val || ''); }
   </script>
 </body>
-
-</html>
+</html></html>

@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mailbox — Company Portal</title>
+  <link rel="stylesheet" href="/css/main.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <style>
+    .mailbox-layout { display: grid; grid-template-columns: 350px 1fr; gap: 20px; height: calc(100vh - 140px); }
+    .message-list { background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; overflow-y: auto; display: flex; flex-direction: column; }
+    .msg-item { padding: 16px; border-bottom: 1px solid var(--border); cursor: pointer; transition: all 0.2s; position: relative; border-left: 3px solid transparent; }
+    .msg-item:hover { background: rgba(255,255,255,0.03); }
+    .msg-item.active { background: rgba(168,85,247,0.08); border-left-color: var(--purple); }
+    .msg-item.unread { font-weight: 700; }
+    .msg-item.unread::after { content: ''; position: absolute; top: 16px; right: 16px; width: 8px; height: 8px; background: var(--purple); border-radius: 50%; box-shadow: 0 0 10px var(--purple); }
+    
+    .msg-header { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 0.8rem; color: var(--text-muted); }
+    .msg-subject { font-size: 0.95rem; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .msg-preview { font-size: 0.8rem; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    .message-view { background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; display: flex; flex-direction: column; overflow: hidden; }
+    .view-header { padding: 24px; border-bottom: 1px solid var(--border); background: rgba(0,0,0,0.2); }
+    .view-body { flex: 1; padding: 24px; overflow-y: auto; display: flex; flex-direction: column; gap: 20px; }
+    .view-footer { padding: 20px; border-top: 1px solid var(--border); background: rgba(0,0,0,0.2); }
+    
+    .bubble { max-width: 80%; padding: 14px 18px; border-radius: 16px; font-size: 0.9rem; line-height: 1.5; }
+    .bubble.doctor { align-self: flex-start; background: var(--bg-secondary); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+    .bubble.replier { align-self: flex-end; background: var(--purple-dim); border: 1px solid var(--purple); color: #fff; border-bottom-right-radius: 4px; }
+    .bubble-meta { font-size: 0.7rem; color: var(--text-muted); margin-top: 6px; display: flex; justify-content: space-between; }
+  </style>
+</head>
+<body>
+  <div class="video-background"><video autoplay muted loop playsinline><source src="/BG.mp4" type="video/mp4"></video></div>
+  <div class="video-overlay"></div>
+  <div class="page-layout">
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <div class="logo-icon">💠</div>
+        <div><div class="logo-text">MedAnnotate</div><div class="logo-sub">Company Portal</div></div>
+      </div>
+      <nav class="sidebar-nav">
+        <div class="nav-section-label">Main</div>
+        <a href="/company/dashboard" class="nav-item"><i class="fa fa-gauge"></i> Dashboard</a>
+        <a href="/company/upload" class="nav-item"><i class="fa fa-upload"></i> Upload Images</a>
+        <a href="/company/batches" class="nav-item"><i class="fa fa-layer-group"></i> My Images</a>
+        <a href="/company/mailbox" class="nav-item active"><i class="fa fa-envelope"></i> Mailbox</a>
+        <a href="/company/withdrawals" class="nav-item"><i class="fa fa-money-bill-wave"></i> Doctor Withdrawals</a>
+        <a href="/company/review" class="nav-item"><i class="fa fa-check-circle"></i> Review Annotations</a>
+        <div class="nav-section-label">Account</div>
+        <a href="/company/profile" class="nav-item"><i class="fa fa-building"></i> Company Profile</a>
+        <a href="/company/settings" class="nav-item"><i class="fa fa-gear"></i> Settings</a>
+      </nav>
+      <div class="sidebar-footer">
+        <button class="logout-btn" onclick="logout()"><i class="fa fa-right-from-bracket"></i> Sign Out</button>
+      </div>
+    </aside>
+
+    <header class="navbar">
+      <div class="navbar-left">
+        <div><div class="page-title">Company Mailbox</div><div class="page-subtitle">Direct inquiries from your annotating doctors</div></div>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <div class="mailbox-layout">
+        <div class="message-list" id="inquiry-list">
+          <div style="text-align:center;padding:40px;color:var(--text-muted)">Loading messages...</div>
+        </div>
+        
+        <div class="message-view" id="empty-view">
+          <div style="flex:1;display:grid;place-items:center;color:var(--text-muted);text-align:center">
+            <div><i class="fa fa-message" style="font-size:4rem;opacity:0.2;margin-bottom:20px"></i><h3>No Selection</h3><p>Select a message thread to view the conversation with the doctor.</p></div>
+          </div>
+        </div>
+
+        <div class="message-view" id="active-view" style="display:none">
+          <div class="view-header">
+            <h2 id="v-subject" style="margin:0 0 8px">...</h2>
+            <div id="v-doctor" style="color:var(--purple);font-weight:600;font-size:0.9rem">...</div>
+          </div>
+          <div class="view-body" id="v-thread"></div>
+          <div class="view-footer">
+            <div style="display:flex;gap:12px">
+              <textarea id="reply-text" class="form-input" style="height:44px;min-height:44px;resize:none" placeholder="Type your reply to the doctor..."></textarea>
+              <button class="btn btn-primary" style="background:var(--purple);border-color:var(--purple)" onclick="sendReply()"><i class="fa fa-paper-plane"></i></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    let inquiries = [];
+    let activeId = null;
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      requireAuth(['company']);
+      loadMailbox();
+    });
+
+    async function loadMailbox() {
+      const res = await api.get('/support/mailbox');
+      if (res?.ok) {
+        inquiries = res.data.inquiries;
+        renderList();
+      }
+    }
+
+    function renderList() {
+      const container = document.getElementById('inquiry-list');
+      if (!inquiries.length) {
+        container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted)">No messages received yet</div>';
+        return;
+      }
+      container.innerHTML = inquiries.map(i => `
+        <div class="msg-item ${activeId===i.id?'active':''} ${i.status==='unread'?'unread':''}" onclick="selectInquiry('${i.id}')">
+          <div class="msg-header"><span>Dr. ${esc(i.doctor_name)}</span><span>${timeAgo(i.created_at)}</span></div>
+          <div class="msg-subject">${esc(i.subject)}</div>
+          <div class="msg-preview">${esc(i.message)}</div>
+        </div>
+      `).join('');
+    }
+
+    function selectInquiry(id) {
+      activeId = id;
+      renderList();
+      const i = inquiries.find(x => x.id === id);
+      document.getElementById('empty-view').style.display = 'none';
+      document.getElementById('active-view').style.display = 'flex';
+      document.getElementById('v-subject').textContent = i.subject;
+      document.getElementById('v-doctor').textContent = `Thread with: Dr. ${i.doctor_name}`;
+      
+      const thread = document.getElementById('v-thread');
+      let html = `<div class="bubble doctor">
+        ${esc(i.message)}
+        <div class="bubble-meta"><span>${formatDate(i.created_at)}</span></div>
+      </div>`;
+      
+      (i.replies || []).forEach(r => {
+        html += `<div class="bubble ${r.sender_role==='doctor'?'doctor':'replier'}">
+          ${esc(r.message)}
+          <div class="bubble-meta"><span>${r.sender_name} (${r.sender_role})</span><span>${formatDate(r.created_at)}</span></div>
+        </div>`;
+      });
+      
+      thread.innerHTML = html;
+      thread.scrollTop = thread.scrollHeight;
+    }
+
+    async function sendReply() {
+      const msg = document.getElementById('reply-text').value.trim();
+      if (!msg || !activeId) return;
+      
+      const res = await api.post(`/support/inquiry/${activeId}/reply`, { message: msg });
+      if (res.ok) {
+        document.getElementById('reply-text').value = '';
+        await loadMailbox();
+        selectInquiry(activeId);
+        showToast('Reply sent to doctor!', 'success');
+      } else {
+        showToast(res.data?.error || 'Failed to send reply', 'error');
+      }
+    }
+
+    function esc(s) { return String(s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  </script>
+</body>
+</html>

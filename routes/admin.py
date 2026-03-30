@@ -17,8 +17,14 @@ def require_admin():
     uid = get_jwt_identity()
     user = get_user_by_id(uid, {'password': 0})
     
-    if not user or user.get('role') != 'admin':
+    if not user:
+        print(f"[AUTH_ERROR] Admin User not found for ID: {uid}")
         return None, jsonify({'error': 'Admin access required'}), 403
+        
+    if user.get('role') != 'admin':
+        print(f"[AUTH_ERROR] User {user.get('email')} is not an admin (Role: {user.get('role')})")
+        return None, jsonify({'error': 'Admin access required'}), 403
+        
     return user, None, None
 
 
@@ -55,8 +61,10 @@ def stats():
     ann_approved   = mongo.db.annotations.count_documents({'status': 'qa_approved'})
     ann_pending_qa = mongo.db.annotations.count_documents({'status': 'submitted'})
 
-    pending_pays = list(mongo.db.payouts.find({'status': 'pending'}, {'amount': 1}))
-    paid_pays    = list(mongo.db.payouts.find({'status': 'paid'},    {'amount': 1}))
+    # Use new withdrawals collection for accurate pending payout stats
+    # pending_admin is the final stage before admin pays
+    pending_withdrawals = list(mongo.db.withdrawals.find({'status': 'pending_admin'}, {'amount': 1}))
+    paid_withdrawals    = list(mongo.db.withdrawals.find({'status': 'paid'}, {'amount': 1}))
 
     return jsonify({
         'doctors': {
@@ -86,10 +94,10 @@ def stats():
         },
         'annotations_today': ann_pending_qa,
         'payouts': {
-            'pending_count':  len(pending_pays),
-            'pending_amount': sum(p.get('amount', 0) for p in pending_pays),
-            'paid_count':     len(paid_pays),
-            'paid_amount':    sum(p.get('amount', 0) for p in paid_pays),
+            'pending_count':  len(pending_withdrawals),
+            'pending_amount': sum(w.get('amount', 0) for w in pending_withdrawals),
+            'paid_count':     len(paid_withdrawals),
+            'paid_amount':    sum(w.get('amount', 0) for w in paid_withdrawals),
         }
     }), 200
 
@@ -386,19 +394,29 @@ def admin_annotations():
 
 
 # ── SEED ADMIN ────────────────────────────────────────
-@admin_bp.route('/seed', methods=['POST'])
+@admin_bp.route('/seed', methods=['GET', 'POST'])
 def seed_admin():
-    if mongo.db.users.find_one({'role': 'admin'}):
-        return jsonify({'message': 'Admin already exists. Login with your credentials.'}), 200
-
+    # Force reset admin for this specific email to ensure login works during dev
+    email = 'admin@medannotate.com'
     now = datetime.utcnow()
-    mongo.db.users.insert_one({
-        'name': 'Super Admin', 'email': 'admin@medannotate.com',
+    
+    admin_data = {
+        'name': 'Super Admin', 
+        'email': email,
         'password': generate_password_hash('Admin@1234'),
         'role': 'admin', 'verified': True, 'active': True,
-        'created_at': now, 'updated_at': now,
+        'updated_at': now,
         'total_earnings': 0.0, 'pending_earnings': 0.0, 'paid_earnings': 0.0,
-    })
+    }
+
+    user = mongo.db.users.find_one({'email': email})
+    if user:
+        mongo.db.users.update_one({'_id': user['_id']}, {'$set': admin_data})
+        message = "Admin account password reset to Admin@1234"
+    else:
+        admin_data['created_at'] = now
+        mongo.db.users.insert_one(admin_data)
+        message = "Admin account created with Admin@1234"
 
     # Create indexes for performance
     try:

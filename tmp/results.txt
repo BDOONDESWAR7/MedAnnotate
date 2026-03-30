@@ -1,0 +1,39 @@
+
+--- final_stabilization_plan.md.resolved.0 ---
+#### [MODIFY] [annotations.py](file:///c:/Users/VISSU/OneDrive/Pictures/Doondi/medical/medical/routes/annotations.py)
+
+#### [MODIFY] [review.html](file:///c:/Users/VISSU/OneDrive/Pictures/Doondi/medical/medical/frontend/company/review.html)
+
+### [NEW] [restart_server.bat](file:///c:/Users/VISSU/OneDrive/Pictures/Doondi\medical\medical\restart_server.bat)
+
+
+--- fix_api_404_plan.md.resolved.0 ---
+#### [MODIFY] [demo_server.py](file:///c:/Users/VISSU/OneDrive/Pictures/Doondi/medical/medical/demo_server.py)
+
+
+--- fix_withdrawal_404_plan.md.resolved.0 ---
+#### [MODIFY] [demo_server.py](file:///c:/Users/VISSU/OneDrive/Pictures/Doondi/medical/medical/demo_server.py)
+
+
+--- implementation_plan.md.resolved.0 ---
+#### [MODIFY] [routes/images.py](file:///c:/Users/VISSU/OneDrive/Pictures/Doondi/medical/medical/routes/images.py)
+
+#### [MODIFY] [routes/annotations.py](file:///c:/Users/VISSU/OneDrive/Pictures/Doondi/medical/medical/routes/annotations.py)
+
+#### [MODIFY] [routes/admin.py](file:///c:/Users/VISSU/OneDrive/Pictures/Doondi/medical/medical/routes/admin.py)
+
+#### [NEW] [routes/withdrawals.py](file:///c:/Users/VISSU/OneDrive/Pictures/Doondi/medical/medical/routes/withdrawals.py)
+
+#### [MODIFY] [frontend/company/review.html](file:///c:/Users/VISSU/OneDrive/Pictures/Doondi/medical/medical/frontend/company/review.html)
+
+#### [MODIFY] [frontend/doctor/wallet.html](file:///c:/Users/VISSU/OneDrive/Pictures/Doondi/medical/medical/frontend/doctor/wallet.html)
+
+#### [MODIFY] [frontend/doctor/earnings.html](file:///c:/Users/VISSU/OneDrive/Pictures/Doondi/medical/medical/frontend/earnings.html)
+
+#### [NEW] [frontend/company/withdrawals.html](file:///c:/Users/VISSU/OneDrive/Pictures/Doondi/medical/medical/frontend/company/withdrawals.html)
+
+
+--- typography_redesign_plan.md.resolved.0 ---
+#### [MODIFY] [index.html](file:///c:/Users/VISSU/OneDrive/Pictures/Doondi/medical/medical/frontend/index.html)
+
+#### [MODIFY] [main.css](file:///c:/Users/VISSU/OneDrive/Pictures/Doondi/medical/medical/frontend/css/main.css)

@@ -27,12 +27,17 @@ def get_image_by_id(img_id, projection=None):
     if not img_id:
         return None
     
-    try:
-        oid = ObjectId(img_id)
-        img = mongo.db.images.find_one({'_id': oid}, projection)
+    # Try ObjectID if length is 24 hex chars
+    if isinstance(img_id, str) and len(img_id) == 24:
+        try:
+            oid = ObjectId(img_id)
+            img = mongo.db.images.find_one({'_id': oid}, projection)
+            if img: return img
+        except:
+            pass
+    elif isinstance(img_id, ObjectId):
+        img = mongo.db.images.find_one({'_id': img_id}, projection)
         if img: return img
-    except:
-        pass
         
     img = mongo.db.images.find_one({'id': img_id}, projection)
     return img

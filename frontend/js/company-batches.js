@@ -289,6 +289,15 @@ async function openFullImage(imgId) {
   modal.style.display = 'flex';
   try {
     const token = getToken();
+
+    // 1. Try to fetch annotated version first
+    const annRes = await api.get(`/images/${imgId}/view_annotated`);
+    if (annRes?.ok && annRes.data.is_annotated) {
+        imgEl.src = annRes.data.image_data;
+        return;
+    }
+
+    // 2. Fall back to original GridFS file
     const r = await fetch(`/api/images/${imgId}/file`, { headers: {'Authorization': `Bearer ${token}`} });
     if (!r.ok) {
         const errText = await r.text();

@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Doctor Withdrawals — Company Portal</title>
+  <link rel="stylesheet" href="/css/main.css" />
+  <style>
+    body { background: #060b16; }
+    .status-badge { padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; }
+    .status-pending_company { color: var(--gold); background: rgba(255,191,0,0.1); border: 1px solid rgba(255,191,0,0.2); }
+    .status-pending_admin { color: var(--blue); background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.2); }
+    .status-paid { color: var(--med-green); background: rgba(0,184,148,0.1); border: 1px solid rgba(0,184,148,0.2); }
+  </style>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+</head>
+<body>
+  <div class="video-background"><video autoplay muted loop playsinline><source src="/BG.mp4" type="video/mp4"></video></div>
+  <div class="video-overlay"></div>
+  <div class="page-layout">
+    
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <div class="logo-icon">🤖</div>
+        <div><div class="logo-text">MedAnnotate</div><div class="logo-sub">Company Portal</div></div>
+      </div>
+      <nav class="sidebar-nav">
+        <div class="nav-section-label">Main</div>
+        <a href="/company/dashboard" class="nav-item"><i class="fa fa-gauge"></i> Dashboard</a>
+        <a href="/company/upload" class="nav-item"><i class="fa fa-upload"></i> Upload Images</a>
+        <a href="/company/batches" class="nav-item"><i class="fa fa-layer-group"></i> My Images</a>
+        <a href="/company/mailbox" class="nav-item"><i class="fa fa-envelope"></i> Mailbox</a>
+        <a href="/company/withdrawals" class="nav-item active"><i class="fa fa-money-bill-wave"></i> Doctor Withdrawals</a>
+        <a href="/company/review" class="nav-item"><i class="fa fa-check-circle"></i> Review Annotations</a>
+        <div class="nav-section-label">Account</div>
+        <a href="/company/profile" class="nav-item"><i class="fa fa-building"></i> Company Profile</a>
+        <a href="/company/settings" class="nav-item"><i class="fa fa-gear"></i> Settings</a>
+      </nav>
+      <div class="sidebar-footer">
+        <button class="logout-btn" onclick="logout()"><i class="fa fa-right-from-bracket"></i> Sign Out</button>
+      </div>
+    </aside>
+
+    <header class="navbar">
+      <div class="navbar-left">
+        <div>
+          <div class="page-title">Doctor Withdrawals</div>
+          <div class="page-subtitle" id="today-date">Review and approve payout requests for your clinical datasets</div>
+        </div>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <div class="alert alert-warning" style="margin-bottom:24px">
+        <i class="fa fa-triangle-exclamation"></i>
+        <span>Requests below require your verification of work completion before being forwarded to Admin for payment.</span>
+      </div>
+
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Doctor</th>
+              <th>Date</th>
+              <th>Amount</th>
+              <th>Status</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="company-withdrawals-tbody">
+            <tr><td colspan="5" style="text-align:center;padding:40px;"><span class="spinner"></span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', async () => {
+      const user = requireAuth(['company']);
+      if (!user) return;
+      loadCompanyWithdrawals();
+    });
+
+    async function loadCompanyWithdrawals() {
+      const tbody = document.getElementById('company-withdrawals-tbody');
+      const res = await api.get('/withdrawals/company/pending');
+      
+      if (!res?.ok || !res.data.withdrawals?.length) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:60px;color:var(--text-muted)"><i class="fa fa-circle-check" style="font-size:2.5rem;display:block;margin-bottom:12px;opacity:0.3"></i>No pending doctor withdrawal requests for your projects.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = res.data.withdrawals.map(w => `
+        <tr class="fade-in">
+          <td style="font-weight:600">${escHtml(w.doctor_name)}</td>
+          <td style="color:var(--text-secondary);font-size:0.85rem">${new Date(w.created_at).toLocaleDateString()}</td>
+          <td style="color:var(--med-green);font-weight:700">$${(w.amount||0).toFixed(2)}</td>
+          <td><span class="status-badge status-${w.status}">${w.status.replace('_', ' ').toUpperCase()}</span></td>
+          <td>
+            ${w.status === 'pending_company' 
+              ? `<button class="btn btn-green btn-sm" onclick="approveWithdrawal('${w.id||w._id}', this)">
+                  <i class="fa fa-check"></i> Approve for Payout
+                 </button>`
+              : `<span style="font-size:0.8rem;color:var(--text-muted)">Forwarded to Admin</span>`
+            }
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    async function approveWithdrawal(wid, btn) {
+      if (!confirm('By approving this, you verify that the doctor has successfully completed the assigned medical annotations. Proceed?')) return;
+      
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Processing...';
+      
+      const res = await api.post(`/withdrawals/${wid}/company-approve`);
+      if (res?.ok) {
+        showToast('Withdrawal forwarded to Admin for final payment.', 'success');
+        loadCompanyWithdrawals();
+      } else {
+        showToast(res?.data?.error || 'Approval failed', 'error');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa fa-check"></i> Approve for Payout';
+      }
+    }
+
+    function escHtml(s) {
+      const d = document.createElement('div');
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    function showToast(m, type='info') {
+      const t = document.createElement('div');
+      t.style.cssText = `position:fixed;bottom:24px;right:24px;background:${type==='error'?'#ff4d4d':'var(--med-green)'};color:#fff;padding:12px 20px;border-radius:10px;z-index:99999;box-shadow:0 8px 24px rgba(0,0,0,0.4);animation:fadeIn 0.3s`;
+      t.innerHTML = `<i class="fa fa-${type==='error'?'circle-exclamation':'circle-check'}"></i> ${m}`;
+      document.body.appendChild(t);
+      setTimeout(() => t.remove(), 4000);
+    }
+  </script>
+</body>
+</html>

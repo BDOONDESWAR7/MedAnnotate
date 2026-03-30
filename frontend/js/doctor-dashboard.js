@@ -1,14 +1,26 @@
 // Doctor Dashboard — fully fixed, real-time DB data, profile modal
 
 document.addEventListener('DOMContentLoaded', async () => {
-  const user = requireAuth(['doctor']);
+  let user = requireAuth(['doctor']);
   if (!user) return;
 
-  initNavbar(user);
-  initDateDisplay();
-  initHero(user);
+  // Initial UI render with cached data
+  renderUI(user);
 
-  // Load all data in parallel for speed
+  // Refresh user profile from DB for real-time status (verification, earnings)
+  try {
+    const res = await api.get('/auth/profile');
+    if (res.ok) {
+      user = res.data;
+      localStorage.setItem('user', JSON.stringify(user));
+      // Re-render UI with fresh verified status!
+      renderUI(user);
+    }
+  } catch(e) {
+    console.warn('Profile refresh failed:', e);
+  }
+
+  // Load secondary data in parallel
   try {
     await Promise.all([loadStats(), loadImageQueue(), loadQAQueue(), loadActivity()]);
   } catch(e) {
@@ -16,6 +28,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     showToast('Some data failed to load', 'warning');
   }
 });
+
+function renderUI(user) {
+  initNavbar(user);
+  initDateDisplay();
+  initHero(user);
+}
 
 function initDateDisplay() {
   const el = document.getElementById('today-date');
@@ -130,7 +148,7 @@ function renderQueue(images, container) {
   container.innerHTML = images.map(img => {
     const icon = icons[img.department] || icons.default;
     return `
-    <div class="image-card fade-in" style="cursor:pointer" onclick="window.location.href='/doctor/annotate?id=${img.id || img._id}'">
+    <div class="image-card fade-in" style="cursor:pointer" onclick="window.location.href='/doctor/annotate?id=${img._id}'">
       <div class="image-thumb">
         <i class="fa ${icon}" style="color:var(--cyan);font-size:1.2rem"></i>
       </div>

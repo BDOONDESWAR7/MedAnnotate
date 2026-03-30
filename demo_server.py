@@ -34,7 +34,50 @@ def seed_demo_data():
         'created_at': datetime.utcnow().isoformat(),
         'total_earnings': 0
     }
-    # (Other demo data removed for a clean production-ready state)
+    
+    # Dummy Company
+    users['comp-dummy'] = {
+        'id': 'comp-dummy', 'name': 'Dummy Company',
+        'email': 'company@dummy.com',
+        'password': generate_password_hash('password123'),
+        'role': 'company', 'verified': True,
+        'created_at': datetime.utcnow().isoformat(),
+        'total_earnings': 0
+    }
+    
+    # Dummy Doctor
+    users['doc-dummy'] = {
+        'id': 'doc-dummy', 'name': 'Dummy Doctor',
+        'email': 'doctor@dummy.com',
+        'password': generate_password_hash('password123'),
+        'role': 'doctor', 'verified': True,
+        'created_at': datetime.utcnow().isoformat(),
+        'total_earnings': 0, 'pending_earnings': 0
+    }
+
+    # Image Uploaded & Approved
+    images_store['img-123xyz'] = {
+        'id': 'img-123xyz', 'company_id': 'comp-dummy', 'filename': 'doctor-ai.jpeg',
+        'department': 'Radiology', 'created_at': datetime.utcnow().isoformat(),
+        'status': 'approved', 'assigned_doctor_id': 'doc-dummy'
+    }
+
+    # Annotation created & approved
+    annotations_store['ann-123xyz'] = {
+        'id': 'ann-123xyz', 'image_id': 'img-123xyz', 'doctor_id': 'doc-dummy',
+        'doctor_name': 'Dummy Doctor', 'status': 'qa_approved',
+        'labels': [{'label': 'Anomaly'}], 'notes': 'Anomaly Detected',
+        'created_at': datetime.utcnow().isoformat(), 'qa_by': 'comp-dummy',
+        'qa_comment': 'Good job', 'qa_at': datetime.utcnow().isoformat()
+    }
+    
+    # The crucial pending payout that caused the 404 issue originally
+    payouts_store['pay-123xyz'] = {
+        'id': 'pay-123xyz', 'doctor_id': 'doc-dummy', 'doctor_name': 'Dummy Doctor',
+        'specialty': 'Radiology', 'image_id': 'img-123xyz', 'image_filename': 'doctor-ai.jpeg',
+        'annotation_id': 'ann-123xyz', 'amount': PAY_PER_IMAGE, 'status': 'pending',
+        'created_at': datetime.utcnow().isoformat()
+    }
 
 seed_demo_data()
 
@@ -242,6 +285,14 @@ def qa_review(ann_id):
             users[ann['doctor_id']]['total_earnings'] = users[ann['doctor_id']].get('total_earnings', 0) + PAY_PER_IMAGE
     return jsonify({'status': ann['status']}), 200
 
+@app.route('/api/annotations/image/<img_id>', methods=['GET'])
+def get_annotation_by_image(img_id):
+    u = get_current_user()
+    if not u: return jsonify({'error': 'Unauthorized'}), 401
+    ann = next((a for a in annotations_store.values() if a['image_id'] == img_id), None)
+    if not ann: return jsonify({'error': 'Not found'}), 404
+    return jsonify(ann), 200
+
 @app.route('/api/annotations/my-stats', methods=['GET'])
 def my_stats():
     u = get_current_user()
@@ -331,6 +382,38 @@ def qa_queue():
                 'submitted_at': ann.get('submitted_at', ann['created_at'])
             })
     return jsonify({'queue': queue}), 200
+
+# ========== WITHDRAWAL ROUTES ==========
+@app.route('/api/withdrawals/company/pending', methods=['GET'])
+def company_pending_withdrawals():
+    u = get_current_user()
+    if not u: return jsonify({'error': 'Unauthorized'}), 401
+    pending = [p for p in payouts_store.values() if p['status'] == 'pending']
+    return jsonify({'withdrawals': pending}), 200
+
+@app.route('/api/withdrawals/<pay_id>/company-approve', methods=['POST'])
+def company_approve_withdrawal(pay_id):
+    u = get_current_user()
+    if not u: return jsonify({'error': 'Unauthorized'}), 401
+    if pay_id not in payouts_store: return jsonify({'error': 'Not found'}), 404
+    payouts_store[pay_id]['status'] = 'pending_admin'
+    return jsonify({'message': 'Approved by company'}), 200
+
+@app.route('/api/withdrawals/admin/pending', methods=['GET'])
+def admin_pending_withdrawals():
+    u = get_current_user()
+    if not u: return jsonify({'error': 'Unauthorized'}), 401
+    pending = [p for p in payouts_store.values() if p['status'] == 'pending_admin']
+    return jsonify({'withdrawals': pending}), 200
+
+@app.route('/api/withdrawals/<pay_id>/pay', methods=['POST'])
+def admin_pay_withdrawal(pay_id):
+    u = get_current_user()
+    if not u: return jsonify({'error': 'Unauthorized'}), 401
+    if pay_id not in payouts_store: return jsonify({'error': 'Not found'}), 404
+    payouts_store[pay_id]['status'] = 'paid'
+    payouts_store[pay_id]['paid_at'] = datetime.utcnow().isoformat()
+    return jsonify({'message': 'Marked as paid'}), 200
 
 # ========== ADMIN ROUTES ==========
 @app.route('/api/admin/stats', methods=['GET'])
@@ -431,6 +514,10 @@ def company_dash(): return send_from_directory('frontend/company', 'dashboard.ht
 def company_up():   return send_from_directory('frontend/company', 'upload.html')
 @app.route('/company/batches')
 def company_bat():  return send_from_directory('frontend/company', 'batches.html')
+@app.route('/company/review')
+def company_rev():  return send_from_directory('frontend/company', 'review.html')
+@app.route('/company/withdrawals')
+def company_with(): return send_from_directory('frontend/company', 'withdrawals.html')
 @app.route('/admin/dashboard')
 def admin_dash():   return send_from_directory('frontend/admin', 'dashboard.html')
 @app.route('/css/<path:filename>')

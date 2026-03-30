@@ -89,20 +89,20 @@ async function loadVerificationQueue() {
 
 // ── PENDING PAYOUTS ────────────────────────────────
 async function loadPayouts() {
-  const res   = await api.get('/admin/payouts?status=pending');
+  const res   = await api.get('/withdrawals/admin/pending');
   const tbody = document.getElementById('payouts-tbody');
   if (!tbody) return;
-  if (!res?.ok || !res.data.payouts?.length) {
+  if (!res?.ok || !res.data.withdrawals?.length) {
     tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--text-muted);">
       <i class="fa fa-circle-check" style="color:var(--green)"></i> No pending payouts</td></tr>`;
     return;
   }
-  tbody.innerHTML = res.data.payouts.slice(0, 6).map(p => `
+  tbody.innerHTML = res.data.withdrawals.slice(0, 6).map(w => `
     <tr class="fade-in">
-      <td style="font-weight:600">${escHtml(p.doctor_name)}</td>
-      <td><span class="badge badge-cyan" style="font-size:0.7rem">${escHtml(p.specialty || '—')}</span></td>
-      <td style="color:var(--gold);font-weight:700">$${Number(p.amount || 0).toFixed(2)}</td>
-      <td><button class="btn btn-gold btn-sm" onclick="markPaid('${p.id || p._id}',this)">
+      <td style="font-weight:600">${escHtml(w.doctor_name)}</td>
+      <td><span class="badge badge-purple" style="font-size:0.7rem">${escHtml(w.method || 'System')}</span></td>
+      <td style="color:var(--gold);font-weight:700">${formatMoney(w.amount || 0)}</td>
+      <td><button class="btn btn-gold btn-sm" onclick="markPaid('${w.id || w._id}',this)">
         <i class="fa fa-dollar-sign"></i> Pay Now</button></td>
     </tr>`).join('');
 }
@@ -168,23 +168,22 @@ async function loadDoctors(verified = '') {
 
 // ── ALL PAYOUTS TABLE ──────────────────────────────
 async function loadAllPayouts() {
-  const res   = await api.get('/admin/payouts?status=pending&per_page=50');
+  const res   = await api.get('/withdrawals/admin/pending');
   const tbody = document.getElementById('all-payouts-tbody');
   if (!tbody) return;
-  if (!res?.ok || !res.data.payouts?.length) {
+  if (!res?.ok || !res.data.withdrawals?.length) {
     tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text-muted)">No pending payouts</td></tr>`;
     return;
   }
-  tbody.innerHTML = res.data.payouts.map(p => `
+  tbody.innerHTML = res.data.withdrawals.map(w => `
     <tr>
-      <td style="font-weight:600">${escHtml(p.doctor_name)}</td>
-      <td><span class="badge badge-cyan">${escHtml(p.specialty || '—')}</span></td>
-      <td style="font-size:0.8rem;color:var(--text-secondary);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
-        ${escHtml(p.image_filename || '—')}</td>
-      <td style="color:var(--gold);font-weight:700">$${Number(p.amount || 0).toFixed(2)}</td>
-      <td style="font-size:0.8rem;color:var(--text-secondary)">${formatDate(p.created_at)}</td>
-      <td><button class="btn btn-gold btn-sm" onclick="markPaid('${p.id || p._id}',this)">
-        <i class="fa fa-dollar-sign"></i> Pay</button></td>
+      <td style="font-weight:600">${escHtml(w.doctor_name)}</td>
+      <td><span class="badge badge-blue">${escHtml(w.method || 'System')}</span></td>
+      <td style="font-size:0.8rem;color:var(--text-secondary)">${escHtml(w.company_name || 'System Approved')}</td>
+      <td style="color:var(--gold);font-weight:700">${formatMoney(w.amount || 0)}</td>
+      <td style="font-size:0.8rem;color:var(--text-secondary)">${formatDate(w.created_at)}</td>
+      <td><button class="btn btn-gold btn-sm" onclick="markPaid('${w.id || w._id}',this)">
+        <i class="fa fa-dollar-sign"></i> Pay & Finalize</button></td>
     </tr>`).join('');
 }
 
@@ -228,8 +227,21 @@ async function openFullImage(imgId) {
   if (!modal || !imgEl) return;
   imgEl.src = '';
   modal.style.display = 'flex';
+  
   try {
     const token = getToken();
+    
+    // 1. Try to fetch annotated version first
+    const annRes = await api.get(`/images/${imgId}/view_annotated`);
+    if (annRes?.ok && annRes.data.is_annotated) {
+        imgEl.src = annRes.data.image_data;
+        if (annRes.data.notes) {
+            console.log("Annotation Notes:", annRes.data.notes);
+        }
+        return;
+    }
+
+    // 2. Fall back to original GridFS file
     const r = await fetch(`/api/images/${imgId}/file`, { headers: {'Authorization': `Bearer ${token}`} });
     if (!r.ok) {
         const errText = await r.text();
@@ -277,11 +289,12 @@ async function rejectDoctor(id, btn) {
 }
 
 async function markPaid(id, btn) {
+  if (!confirm('Mark this withdrawal request as PAID? This will update the doctor\'s "Paid Earnings" balance.')) return;
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner" style="width:14px;height:14px"></span>';
-  const res = await api.post(`/admin/payouts/${id}/pay`, {});
+  const res = await api.post(`/withdrawals/${id}/pay`, {});
   if (res?.ok) {
-    showToast('Payout marked as paid!', 'success');
+    showToast('Withdrawal marked as paid!', 'success');
     await Promise.all([loadPayouts(), loadStats()]);
     loadAllPayouts();
   } else {

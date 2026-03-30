@@ -31,8 +31,13 @@ def img_to_dict(img):
     if not img:
         return None
     img = dict(img)
+    # Ensure current MongoDB ObjectId is the ONLY identifier sent to frontend
     img['id']  = str(img['_id'])
     img['_id'] = str(img['_id'])
+    # Remove any alternative legacy 'id' field if it exists to prevent collisions
+    # (some older records might have a separate 'id' field)
+    # But since we set img['id'] above, it's already overwritten.
+    
     for f in ('company_id', 'assigned_doctor_id', 'gridfs_id'):
         if img.get(f): img[f] = str(img[f])
     for f in ('created_at', 'updated_at', 'annotated_at', 'qa_at'):
@@ -149,7 +154,8 @@ def upload_image():
     return jsonify({
         'image_id':   str(result.inserted_id),
         'department': department,
-        'assigned_to': assigned_name
+        'assigned_to': assigned_name,
+        'detection':   img_doc['detection']
     }), 201
 
 
@@ -162,8 +168,12 @@ def list_images():
     if not user:
         return jsonify({'error': 'Unauthorized'}), 401
 
-    page     = max(1, int(request.args.get('page', 1)))
-    per_page = min(50, int(request.args.get('per_page', 10)))
+    def get_int(key, default):
+        try: return int(request.args.get(key, default))
+        except: return default
+
+    page     = max(1, get_int('page', 1))
+    per_page = max(1, min(50, get_int('per_page', 10)))
     status   = request.args.get('status', '')
     dept     = request.args.get('department', '')
 
@@ -220,10 +230,10 @@ def serve_image(img_id):
         oid = None
 
     # Search strictly by ID for production integrity
-    query = {'_id': oid} if oid else {'id': img_id}
-    img = mongo.db.images.find_one(query, {'gridfs_id': 1, 'filename': 1})
+    img = get_image_by_id(img_id, {'gridfs_id': 1, 'filename': 1})
     
     if not img or not img.get('gridfs_id'):
+        print(f"[serve_image] Image or GridFS ID missing for: {img_id}")
         return jsonify({'error': 'Image data not found in database'}), 404
 
     try:
@@ -234,12 +244,19 @@ def serve_image(img_id):
             gid = ObjectId(gid)
         
         gf = fs.get(gid)
-        return Response(gf.read(), 
+        response = Response(gf.read(), 
                         mimetype=gf.content_type or 'application/octet-stream',
                         headers={'Content-Disposition': f'inline; filename="{img.get("filename", "image")}"'})
+        
+        # KEY FIX: Ensure browser doesn't cache the response for different IDs
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        
+        return response
     except Exception as e:
         print(f"[serve_image] Error retrieving file {img_id}: {str(e)}")
-        return jsonify({'error': 'Failed to retrieve file from storage'}), 500
+        return jsonify({'error': f'Failed to retrieve file: {str(e)}'}), 500
 
 
 # ── DOCTOR PROFILE (visible to company for annotated images) ──
@@ -491,3 +508,41 @@ def verified_doctors():
             'accuracy_pct': round(approved / ann_count * 100, 1) if ann_count else 0
         })
     return jsonify({'doctors': result}), 200
+# ── VIEW ANNOTATED IMAGE ──────────────────────────────────
+@images_bp.route('/<img_id>/view_annotated', methods=['GET'])
+@jwt_required()
+def view_annotated(img_id):
+    """
+    Returns the annotated Base64 image if available (status in qa_review or approved),
+    otherwise returns the original image file directly.
+    """
+    try:
+        oid = ObjectId(img_id)
+        img = mongo.db.images.find_one({'_id': oid})
+    except:
+        img = mongo.db.images.find_one({'id': img_id})
+        
+    if not img:
+        return jsonify({'error': 'Image not found'}), 404
+
+    # Check for submitted/approved annotation
+    ann = mongo.db.annotations.find_one({
+        'image_id': img['_id'],
+        'status': {'$in': ['qa_review', 'approved', 'qa_approved']}
+    })
+
+    if ann and ann.get('annotated_image_data'):
+        # It's a Base64 dataURL (data:image/jpeg;base64,...)
+        # We can return it as JSON or as a direct file. 
+        # For simplicity in <img> tags, we'll return it as a small JSON with the URL.
+        return jsonify({
+            'is_annotated': True,
+            'image_data': ann['annotated_image_data'],
+            'notes': ann.get('notes', ''),
+            'labels': ann.get('labels', [])
+        }), 200
+    
+    return jsonify({
+        'is_annotated': False,
+        'message': 'No annotation found for this image'
+    }), 200
